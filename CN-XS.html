@@ -1,0 +1,156 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>ControlNet-XS</title>
+<!-- <link href="style.css" rel="stylesheet"> -->
+<link href="https://dl.dropbox.com/scl/fi/rmg3z1plr087ui71fumgc/style.css?rlkey=ath0d4h9ihd3mkzurswmnkdgd" rel="stylesheet" >
+</head>
+
+<body>
+<div class="content">
+  <h1><strong>ControlNet-XS </strong></h1>
+  <p id="authors">Denis Zavadski <a href="https://hci.iwr.uni-heidelberg.de/vislearn/people/carsten-rother/">Carsten Rother</a><br>
+    <br>
+  <span style="font-size: 24px">Computer Vision Lab, Heidelberg University
+  </span></p>
+  <br>
+  <img src="https://www.dropbox.com/scl/fi/wclx3c0x96i41diiujijy/FrontPlatzhalter.png?rlkey=kp36uxm7e65ywhwamvg6bn7o4&raw=1" class="teaser-gif" style="width:100%;"><br>
+  <!-- <img src="./example_images/gif_20.gif" class="teaser-gif" style="width:100%;"><br>
+  <img src="./example_images/gif_10.gif" class="teaser-gif" style="width:100%;"><br> -->
+  <h3 style="text-align:center"><em></em></h3>
+    <font size="+2">
+          <p style="text-align: center;">
+            <a target="_blank">[Paper] (Coming Soon)</a> &nbsp;&nbsp;&nbsp;&nbsp;
+            <a href="https://github.com/CVL/ControlNet-XS" target="_blank">[GitHub Code] (Coming Soon)</a> &nbsp;&nbsp;&nbsp;&nbsp;
+            <a href="https://HuggingFace.com/CVL/ControlNet-XS" target="_blank">[Pretrained Models] (Coming Soon)</a> &nbsp;&nbsp;&nbsp;&nbsp;
+          </p>
+    </font>
+</div>
+
+<div class="content">
+  <h2 style="text-align:center;">Overview</h2>
+  <p>
+    With increasing computing capabilities, current model architectures appear to
+follow the trend of simply upscaling all components without validating the necessity
+for doing so. In this project we investigate the size and architectural design of
+ControlNet [Zhang et al., 2023] for controlling the image generation process with
+stable diffusion-based models. We show that a new architecture with as little as
+1% of the parameters of the base model achieves state-of-the art results. Hence
+we call it ControlNet-XS. We provide the code for controlling
+StableDiffusion-XL [Dustin Podell et al., 2023] (Model B, 48M Parameters) and StableDiffusion 2.1 [Robin Rombach et al. 2022] (Model B,
+14M Parameters), all under openrail license.
+  </p>
+</div>
+
+
+<div class="content">
+  <h2>StableDiffusion-XL Control</h2>
+  <p>
+    We evaluate differently sized control models and confirm that the size does not even
+have to be of the same magnitude as the base network, which has 2.6B paramaters.
+The control is evident for sizes of ControlNet-XS of 400M, 104M and 48M parameters,
+as shown below for guidance with depth maps (Midas [René Ranftl et al., 2020]) and canny edges,
+respectively. A row shows three example results of Model B, each with a different seed. Note, we use the same seed for each column.
+
+  </p>
+  <br>
+  <img class="summary-img" src="https://www.dropbox.com/scl/fi/0swocdaedzsrj7ee28yvn/sdxl_midas.png?rlkey=sh1ewm54hp59qkm58rfjp40xn&raw=1" style="width:100%;"> <br>
+  <img class="summary-img" src="https://www.dropbox.com/scl/fi/dn306njffnaw9y6io6avl/sdxl_canny.png?rlkey=cqwqbfsj6kax3rijjz4tmv12l&raw=1" style="width:100%;"> <br>
+  <!-- <p>In certain cases, larger control modules can run into additional troubles and introduce structural artifacts by enforcing the guidance into the generation while 
+    in an overly amplified way as seen with the depth map structured hair. When present, such artefacts do not depend on the scale of the control signal and only disappear 
+    at the cost of lost overall control.
+  </p> -->
+</div>
+
+
+<div class="content">
+  <h2>StableDiffusion Control</h2>
+  <p>
+    <!-- We show generations of three modified ControlNet-XS sizes with 491M, 55M and 14M
+  parameters controlling Stable Diffusion with depth maps (Midas [René Ranftl et al., 2020]) and Canny
+  edges. Even the smallest model with 1.6% of the base model size, which has 865M
+  paramaters, is able to reliably guide the generation process faithfully. -->
+  We show generations of three versions of ControlNet-XS with 491M, 55M and 14M parameters respectively.
+   We control Stable Diffusion with depth maps (Midas [René Ranftl et al., 2020]) and Canny edges.
+  Even the smallest model with 1.6% of the base model size, which has 865M parameters, is able to
+   reliably guide the generation process .
+  As above, a row shows three example results of Model B, each with a different seed. Note, we use the same seed for each column.
+
+  </p>
+  <br>
+
+  <br>
+  <p></p>
+  <img class="summary-img" src="https://www.dropbox.com/scl/fi/tlpx3o6hf8rmxwlpr53eq/sd_midas.png?rlkey=cf3dyij5v482cxgv4ipomn5y2&raw=1" style="width:100%;"> <br>
+  <img class="summary-img" src="https://www.dropbox.com/scl/fi/u9pyycexils1toemu51xo/sd_canny.png?rlkey=cxuu7ej3sotlnukz6dlwaswuo&raw=1" style="width:100%;"> <br>
+</div>
+
+<div class="content">
+  <h2>Method</h2>
+  <p> 
+    The original ControlNet is a copy of the U-Net encoder in the StableDiffusion base model, and hence receives
+the same input as the base model with an additional guidance signal like an edge map. The intermediate
+outputs of the trained ControlNet are then added to the inputs of the decoder layers of the base model.
+Throughout the training process of ControlNet, the weights of the base model are kept frozen. We identify
+several conceptual issues with such an approach leading to an unnecessarily large ControlNet and to a
+significant reduction in quality of the generated image:
+  </p> 
+    <ul type="i">
+      <li>
+        The final output image of stable diffusion, we call the base model, is generated iteratively in a series of time steps.
+         At each time step a U-Net, with an encoder and decoder, is executed as illustrated below.
+          At each iteration, the input to the base model and the control model is the generated image
+           of the previous time step, and the control image for the control model. The problem is that
+            in the encoder phase, both models operate independently, and the feedback from the control model
+             enters only in the decode phase of the base model. The result is a delayed correction/controlling mechanism, 
+             and it implies that the ControlNet has to do two jobs. Instead of solely focusing all network 
+             capacity on correction/controlling, ControlNet has to additionally anticipate in advance,
+              what “mistakes” the Encoder of the base model is going to make.
+      </li>
+      <li>
+        By implying that image generation and controlling require similar model capacities, it is natural to initialize
+        the weights of ControlNet with the weights of the base model, and then fine-tuning them. With our ControlNet-XS
+        we diverge in design from the base model, and hence train the weights of ControlNet-XS from scratch.
+      </li>
+    </ul>
+  <p>
+    We address the first problem (i) of delayed feedback by adding connections from the Encoder base model into the controlling
+    Encoder (A). In this way, the corrections can adapt more quickly to the generation process of the based model.
+    Nonetheless, it does not eliminate the delay entirely, since the encoder of the base model still remains unguided.
+    Hence, we add additional connections from ControlNet-XS into the base model encoder, directly influencing the entire
+    generative process (B). For completeness, we evaluate if there is any benefit in using a
+    mirrored, decoding architecture in the ControlNet setup (C).
+  </p>
+  <br>
+  <img class="summary-img" src="https://www.dropbox.com/scl/fi/pyjlemoovdatdf6epzgfe/method.png?rlkey=v7r8j81pm524eh5ozybaejmzd&raw=1" style="width:100%;"> <br>
+</div>
+
+
+
+
+<div class="content">
+  <h2>Size and FID-Score Comparison</h2>
+  <p>
+    We evaluate the performance of three variations (A, B, C) for Canny
+    edge guidance in comparison to the original ControlNet in terms of FID-score over the validation set of
+    COCO2017. All of our variations achieve a significant improvement, while having just a fraction of the
+    parameters of the original ControlNet.
+  </p>
+
+  <img class="summary-img" src="https://www.dropbox.com/scl/fi/a380tp9d2gc3h2qjoq3zu/fid_versions.png?rlkey=nsusol00a3wrkgeqbcnuck3lr&raw=1" style="width:60%;">
+
+  <p>
+    
+    We focus our attention on variant B and train it with three different model sizes for canny and depth map
+    guidance, respectively, and for StableDiffusion 2.1 and the current StableDIffusion-XL version.    
+  </p>
+  <img class="summary-img" src="https://www.dropbox.com/scl/fi/sftsijiwvq3qnd014guox/fid_comparison.png?rlkey=kbcxt2cj0z19pe4rnhxb7ujfd&raw=1" style="width:55%;">
+</div>
+
+<div class="content">
+  <h2>BibTex</h2>
+  To be announced.
+</div>
+
+</body>
+</html>
