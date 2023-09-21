@@ -41,7 +41,7 @@ ControlNet [Zhang et al., 2023] for controlling the image generation process wit
 stable diffusion-based models. We show that a new architecture with as little as
 1% of the parameters of the base model achieves state-of-the art results, considerably better than ControlNet in terms of FID score. Hence
 we call it ControlNet-XS. We provide the code for controlling
-StableDiffusion-XL [Dustin Podell et al., 2023] (Model B, 48M Parameters) and StableDiffusion 2.1 [Robin Rombach et al. 2022] (Model B,
+StableDiffusion-XL [Podell et al., 2023] (Model B, 48M Parameters) and StableDiffusion 2.1 [Rombach et al. 2022] (Model B,
 14M Parameters), all under openrail license. The different models are explained in the Method section below.
   </p>
 </div>
@@ -53,7 +53,7 @@ StableDiffusion-XL [Dustin Podell et al., 2023] (Model B, 48M Parameters) and St
     We evaluate differently sized control models and confirm that the size does not even
 have to be of the same magnitude as the base network, which has 2.6B paramaters.
 The control is evident for sizes of ControlNet-XS of 400M, 104M and 48M parameters,
-as shown below for guidance with depth maps (Midas [René Ranftl et al., 2020]) and canny edges,
+as shown below for guidance with depth maps (Midas [Ranftl et al., 2020]) and canny edges,
 respectively. A row shows three example results of Model B, each with a different seed. Note, we use the same seed for each column.
 
   </p>
@@ -68,7 +68,7 @@ respectively. A row shows three example results of Model B, each with a differen
   <p>
 
   We show generations of three versions of ControlNet-XS with 491M, 55M and 14M parameters respectively.
-   We control Stable Diffusion with depth maps (Midas [René Ranftl et al., 2020]) and Canny edges.
+   We control Stable Diffusion with depth maps (Midas) and Canny edges.
   Even the smallest model with 1.6% of the base model size, which has 865M parameters, is able to
    reliably guide the generation process .
   As above, a row shows three example results of Model B, each with a different seed. Note, we use the same seed for each column.
@@ -130,7 +130,7 @@ significant reduction in quality of the generated image:
   <p>
     We evaluate the performance of three variations (A, B, C) for Canny
     edge guidance in comparison to the original ControlNet in terms of FID-score over the validation set of
-    COCO2017. All of our variations achieve a significant improvement, while having just a fraction of the
+    COCO2017 [Lin et al., 2014]. All of our variations achieve a significant improvement, while having just a fraction of the
     parameters of the original ControlNet.
   </p>
 
@@ -149,5 +149,43 @@ significant reduction in quality of the generated image:
   To be announced.
 </div>
 
+<div class="content">
+  <h2>References</h2>
+  <dl>
+    <dt>[René et al., 2020]</dt>
+    <dd>
+      René Ranftl, Katrin Lasinger, David Hafner, Konrad
+      Schindler, and Vladlen Koltun. Towards robust monocular
+      depth estimation: Mixing datasets for zero-shot cross-dataset
+      transfer. IEEE Transactions on Pattern Analysis and Machine
+      Intelligence, 44(3):1623–1637, 2020
+    </dd> <br>
+    
+    <dt>[Rombach et all., 2022]</dt>
+    <dd>
+      Robin Rombach, Andreas Blattmann, Dominik Lorenz,
+      Patrick Esser, and Björn Ommer. High-resolution image
+      synthesis with latent diffusion models. In Proceedings of
+      the IEEE/CVF Conference on Computer Vision and Pattern
+      Recognition, pages 10684–10695, 2022
+    </dd><br>
+
+    <dt>[Podell et al., 2023]</dt>
+    <dd>
+      Dustin Podell, Zion English, Kyle Lacey, Andreas Blattmann, Tim Dockhorn, Jonas Müller, Joe Penna, and Robin Rombach. SDXL: improving latent diffusion models for high-resolution image synthesis.
+      CoRR, abs/2307.01952, 2023.
+    </dd><br>
+
+    <dt>[Zhang et al., 2023]</dt>
+    <dd>
+      Lvmin Zhang and Maneesh Agrawala. 2023. Adding conditional control to text-to-image diffusion models. arXiv preprint arXiv:2302.05543 (2023)
+    </dd><br>
+
+    <dt>[Lin et al., 2014]</dt>
+    <dd>
+      Tsung-Yi Lin, Michael Maire, Serge Belongie, James Hays, Pietro Perona, Deva Ramanan, Piotr Dollár, and C Lawrence Zitnick. Microsoft coco: Common objects in context. In ECCV 2014.
+    </dd><br>
+  </dl>
+</div>
 </body>
 </html>
