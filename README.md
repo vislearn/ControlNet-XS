@@ -54,7 +54,7 @@ import torch
 from PIL import Image
 
 path_to_config = 'ControlNet-XS-main/configs/inference/sdxl/sdxl_encD_canny_48m.yaml'
-model = cu.create_model(config_path_depth)
+model = cu.create_model(path_to_config)
 
 image_path = 'PATH/TO/IMAGES/Shoe.png'
 
