@@ -54,7 +54,7 @@ import torch
 from PIL import Image
 
 path_to_config = 'ControlNet-XS-main/configs/inference/sdxl/sdxl_encD_canny_48m.yaml'
-model = cu.create_model(path_to_config)
+model = cu.create_model(path_to_config).to('cuda')
 
 image_path = 'PATH/TO/IMAGES/Shoe.png'
 
@@ -91,7 +91,7 @@ import torch
 from PIL import Image
 
 path_to_config = 'PATH/TO/CONFIG/sd21_encD_depth_14m.yaml'
-model = cu.create_model(path_to_config)
+model = cu.create_model(path_to_config).to('cuda')
 
 size = 768
 image_path = 'PATH/TO/IMAGES/Shoe.png'
