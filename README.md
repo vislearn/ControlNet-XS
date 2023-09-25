@@ -69,7 +69,7 @@ edges = cu.get_canny_edges(image, low_th=canny_low_th, high_th=canny_high_th)
 samples, controls = cu.get_sdxl_sample(
     guidance=edges,
     ddim_steps=10,
-    num_samples=2,
+    num_samples=num_samples,
     model=model,
     shape=[4, size // 8, size // 8],
     control_scale=0.95,
