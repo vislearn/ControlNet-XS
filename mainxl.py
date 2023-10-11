@@ -183,13 +183,12 @@ def get_parser(**parser_kwargs):
     )
     # if version.parse(torch.__version__) >= version.parse("2.0.0"):
     #     parser.add_argument(
-    #         "--resume_from_checkpoint",  # 配置项 冲突~
+    #         "--resume_from_checkpoint",  # 重复的key
     #         type=str,
     #         default=None,
     #         help="single checkpoint file to resume from",
     #     )
     default_args = default_trainer_args()
-    # parser.resume_from_checkpoint = ""
     print(f">> default_args:{default_args}")
     # {'logger': True, 'enable_checkpointing': True, 'callbacks': None, 
     # 'default_root_dir': None, 'gradient_clip_val': None, 
@@ -208,7 +207,7 @@ def get_parser(**parser_kwargs):
     # 'num_sanity_val_steps': 2, 'resume_from_checkpoint': None,
     #  'profiler': None, 'benchmark': None, 'deterministic': None, 'reload_dataloaders_every_n_epochs': 0, 'auto_lr_find': False, 'replace_sampler_ddp': True, 'detect_anomaly': False, 'auto_scale_batch_size': False, 'plugins': None, 'amp_backend': None, 'amp_level': None, 'move_metrics_to_cpu': False, 'multiple_trainloader_mode': 'max_size_cycle', 'inference_mode': True}
     default_args["num_nodes"] = 1
-    default_args["max_steps"] = 2000
+    default_args["max_steps"] = 50
 
     
     for key in default_args:
@@ -572,7 +571,7 @@ if __name__ == "__main__":
 
     opt, unknown = parser.parse_known_args()
     print(f">> init opt args :{opt}")
-    opt.resume = "logs/2023-10-10T09-58-01_ctxs/"
+    # opt.xx = xx
 
     if opt.name and opt.resume:
         raise ValueError(
@@ -658,8 +657,8 @@ if __name__ == "__main__":
 
     try:
         # path_to_config = './configs/inference/sd/sd21_encD_depth_14m.yaml'
-        path_to_config = './configs/sd21_encD_depth_14m.yaml'
-        # path_to_config = './configs/sdxl_encD_depth_48m.yaml'  # SDXL may be hard to init
+        # path_to_config = './configs/sd21_encD_depth_14m.yaml'
+        path_to_config = './configs/sdxl_encD_depth_48m.yaml'  # SDXL may be hard to init
         config = OmegaConf.load(path_to_config)
         print(f">>> load config :{config}")
 
@@ -802,7 +801,7 @@ if __name__ == "__main__":
             f"strategy config: \n ++++++++++++++ \n {strategy_cfg} \n ++++++++++++++ "
         )
         trainer_kwargs["strategy"] = instantiate_from_config(strategy_cfg)
-        print(f">> resume opt.resume {opt.resume}")
+
         # add callback which sets up log directory
         default_callbacks_cfg = {
             "setup_callback": {
@@ -937,7 +936,7 @@ if __name__ == "__main__":
         def melk(*args, **kwargs):
             # run all checkpoint hooks
             if trainer.global_rank == 0:
-                print(f"Summoning checkpoint. ckptdir  {ckptdir}, melk_ckpt_name {melk_ckpt_name}")
+                print("Summoning checkpoint.")
                 if melk_ckpt_name is None:
                     ckpt_path = os.path.join(ckptdir, "last.ckpt")
                 else:

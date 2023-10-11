@@ -38,7 +38,8 @@ class StandardDiffusionLoss(nn.Module):
 
     def __call__(self, network, denoiser, conditioner, input, batch):
         cond = conditioner(batch)
-        additional_model_inputs = {
+        # print(f"conditioner, {type(conditioner)}, batch.keys() {batch.keys()}")       # sgm.modules.encoders.modules.GeneralConditioner
+        additional_model_inputs = {   # 求两个dict中的交集
             key: batch[key] for key in self.batch2model_keys.intersection(batch)
         }
 
@@ -49,8 +50,28 @@ class StandardDiffusionLoss(nn.Module):
                 torch.randn(input.shape[0], device=input.device), input.ndim
             )
         noised_input = input + noise * append_dims(sigmas, input.ndim)
+        # cond crossattention like x or hint, vector, emb additional_model_inputs {} emptydc noise_storch.Size([2, 4, 64, 64]), sigmas torch.Size([2])
+        # for k in cond.keys():   # text encoder 2, 77 , 2048  crossattention    2, 2048    vector
+        #     print(">> cond_shape_dbg",cond[k].shape)
+        print(f">> stabddiffuseion_denoiser cond {cond.keys()}, additional_model_inputs{additional_model_inputs}, noise_s{noise.shape},sigmas{sigmas.shape} ")
+        hint = batch["image"]  # self.input_key  v_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        # v_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        # for k in batch.keys():
+        #     if isinstance(batch[k], list):
+        #         print(f">> cond_shape_dbg {k}", len( batch[k]), batch[k])
+        #     else:
+        #         print(f">> cond_shape_dbg {k}", batch[k].shape)
+
+        # control = torch.stack(
+        #         [
+        #             tt.ToTensor()(
+        #                 # detected_map[..., None].repeat(3, 2)  # single map -> (512, 512, 3) 3channle->(512, 512, 9, 1)
+        #                 guidance
+        #             )
+        #         ] * 2
+        #     ).float().to('cuda')
         model_output = denoiser(
-            network, noised_input, sigmas, cond, **additional_model_inputs
+            network, noised_input, sigmas, cond, hint, **additional_model_inputs
         )
         w = append_dims(denoiser.w(sigmas), input.ndim)
         return self.get_loss(model_output, input, w)

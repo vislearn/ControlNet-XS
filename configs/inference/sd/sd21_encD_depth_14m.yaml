@@ -17,8 +17,11 @@ model:
     monitor: val/loss_simple_ema
     scale_factor: 0.18215
     use_ema: false
-    sync_path: /PATH/TO/STABLEDIFFUSION/v2-1_512-ema-pruned.ckpt     #  path to the StableDiffusion v 2.1 weights
-    ckpt_path_ctr: ./checkpoints/sd21_encD_depth_14m.ckpt            #  path to the ControlNet-XS weights
+    # sync_path: /PATH/TO/STABLEDIFFUSION/v2-1_512-ema-pruned.ckpt     #  path to the StableDiffusion v 2.1 weights
+    # sync_path: /home/dell/workspace/models/v2-1_512-ema-pruned.ckpt     #  path to the StableDiffusion v 2.1 weights
+    sync_path: ./logs/2023-10-10T09-58-01_ctxs/checkpoints/last-v2.ckpt
+    # ckpt_path_ctr: /home/dell/workspace/models/sd21_encD_depth_14m.ckpt            #  path to the ControlNet-XS weights
+    # ckpt_path_ctr: ./logs/2023-10-10T09-58-01_ctxs/checkpoints/last.ckpt            #  path to the ControlNet-XS weights
     synch_control: false
     control_mode: midas
     control_stage_config:

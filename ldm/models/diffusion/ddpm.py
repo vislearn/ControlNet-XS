@@ -422,6 +422,7 @@ class DDPM(pl.LightningModule):
         return self.p_losses(x, t, *args, **kwargs)
 
     def get_input(self, batch, k):
+        # print(">> bath",batch.keys())
         x = batch[k]
         if len(x.shape) == 3:
             x = x[..., None]
@@ -567,6 +568,7 @@ class LatentDiffusion(DDPM):
         else:
             self.register_buffer('scale_factor', torch.tensor(scale_factor))
         self.instantiate_first_stage(first_stage_config)
+        print(f">> cond_stage_config {cond_stage_config}")
         self.instantiate_cond_stage(cond_stage_config)
         self.cond_stage_forward = cond_stage_forward
         self.clip_denoised = False
@@ -593,7 +595,7 @@ class LatentDiffusion(DDPM):
 
     @rank_zero_only
     @torch.no_grad()
-    def on_train_batch_start(self, batch, batch_idx, dataloader_idx):
+    def on_train_batch_start(self, batch, batch_idx):
         # only for very first batch
         if self.scale_by_std and self.current_epoch == 0 and self.global_step == 0 and batch_idx == 0 and not self.restarted_from_ckpt:
             assert self.scale_factor == 1., 'rather not use custom rescaling and std-rescaling simultaneously'
@@ -1173,7 +1175,7 @@ class LatentDiffusion(DDPM):
             if hasattr(self.cond_stage_model, "decode"):
                 xc = self.cond_stage_model.decode(c)
                 log["conditioning"] = xc
-            elif self.cond_stage_key in ["caption", "txt"]:
+            elif self.cond_stage_key in ["caption", "txt", "text"]:
                 xc = log_txt_as_img((x.shape[2], x.shape[3]), batch[self.cond_stage_key], size=x.shape[2] // 25)
                 log["conditioning"] = xc
             elif self.cond_stage_key in ['class_label', "cls"]:

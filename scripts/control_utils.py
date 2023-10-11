@@ -187,7 +187,18 @@ def get_sdxl_sample(
         model.model.scale_list *= control_scale
         print(f'[CONTROL CORRECTION OF {type(model).__name__} SCALED WITH {control_scale}]')
 
-    control = torch.stack([tt.ToTensor()(ds['hint'][..., None].repeat(3, 2))] * num_samples).float().to('cuda')
+    control = torch.stack(
+            [
+                tt.ToTensor()(
+                    # detected_map[..., None].repeat(3, 2)  # single map -> (512, 512, 3) 3channle->(512, 512, 9, 1)
+                    guidance
+                )
+            ] * 2
+        ).float().to('cuda')
+    if len(guidance.shape) < 3:
+        control = torch.stack([tt.ToTensor()(guidance[..., None].repeat(3, 2))] * num_samples).float().to('cuda')
+    # control = torch.stack([tt.ToTensor()(ds['hint'][..., None].repeat(3, 2))] * num_samples).float().to('cuda')
+    print(f">> input sdxl_hint_shape {control.shape}")
     sampling_kwargs = {'hint': control}
 
     if seed is None:
@@ -260,8 +271,17 @@ def get_sd_sample(
         detected_map = einops.rearrange(detected_map, 'c h w -> h w c')
         if isinstance(detected_map, torch.Tensor):
             detected_map = np.array(detected_map)
-
-    control = torch.stack([tt.ToTensor()(guidance[..., None].repeat(3, 2))] * num_samples).float().to('cuda')
+    
+    control = torch.stack(
+            [
+                tt.ToTensor()(
+                    # detected_map[..., None].repeat(3, 2)  # single map -> (512, 512, 3) 3channle->(512, 512, 9, 1)
+                    detected_map
+                )
+            ] * 2
+        ).float().to('cuda')
+    if len(detected_map.shape) < 3:
+        control = torch.stack([tt.ToTensor()(guidance[..., None].repeat(3, 2))] * num_samples).float().to('cuda')
 
     if seed is None:
         seed = 1999158951

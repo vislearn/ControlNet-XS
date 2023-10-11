@@ -1,3 +1,18 @@
+# try train ctxs
+
+1。 prepare configs files configs/sdxl_encD_depth_48m.yaml  configs/sd21_encD_depth_14m.yaml
+2、prepare dataset ,for test ,i use pokenom
+3、main.py to train sd21  running ok , some config write in __main__ 
+mainxl.py to train sdxl   still get some error     
+
+code modify:
+use 3 channel to train, pix to pix, can seen the dataset and config.yaml 
+
+help some to check ~
+....
+
+
+
 # ControlNet-XS
 
 ![](./ControlNet-XS_files/teaser_small.gif)
