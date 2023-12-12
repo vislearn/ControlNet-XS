@@ -20,7 +20,7 @@
   <h3 style="text-align:center"><em></em></h3>
     <font size="+2">
           <p style="text-align: center;">
-            <a target="_blank">[Paper] (Coming Soon)</a> &nbsp;&nbsp;&nbsp;&nbsp;
+            <a href="https://arxiv.org/abs/2312.06573" target="_blank">[Paper]</a> &nbsp;&nbsp;&nbsp;&nbsp;
             <a href="https://github.com/vislearn/ControlNet-XS" target="_blank">[GitHub Code]</a> &nbsp;&nbsp;&nbsp;&nbsp;
             <a href="https://huggingface.co/CVL-Heidelberg/ControlNet-XS" target="_blank">[Pretrained Models]</a> &nbsp;&nbsp;&nbsp;&nbsp;
           </p>
@@ -36,13 +36,13 @@
   <p>
     With increasing computing capabilities, current model architectures appear to
 follow the trend of simply upscaling all components without validating the necessity
-for doing so. In this project we investigate the size and architectural design of
+for doing so. In this project, we investigate the size and architectural design of
 ControlNet [Zhang et al., 2023] for controlling the image generation process with
 stable diffusion-based models. We show that a new architecture with as little as
-1% of the parameters of the base model achieves state-of-the art results, considerably better than ControlNet in terms of FID score. Hence
-we call it ControlNet-XS. We provide the code for controlling
-StableDiffusion-XL [Podell et al., 2023] (Model B, 48M Parameters) and StableDiffusion 2.1 [Rombach et al. 2022] (Model B,
-14M Parameters), all under openrail license. The different models are explained in the Method section below.
+1% of the parameters of the base model achieves state-of-the art results and performs considerably better than ControlNet in terms of FID score.
+Hence, we call it ControlNet-XS. We provide the code for controlling
+StableDiffusion-XL [Podell et al., 2023] (Model B, 48M Parameters) and StableDiffusion 1.5 [Rombach et al. 2022] (Model B,
+14M Parameters) and StableDiffusion 2.1 (Model B, 14M Parameters), all under openrail license. The different models are explained in the Method section below.
   </p>
 </div>
 
@@ -51,9 +51,9 @@ StableDiffusion-XL [Podell et al., 2023] (Model B, 48M Parameters) and StableDif
   <h2>StableDiffusion-XL Control</h2>
   <p>
     We evaluate differently sized control models and confirm that the size does not even
-have to be of the same magnitude as the base network, which has 2.6B paramaters.
+have to be of the same magnitude as the base U-Net network, which has 2.6B paramaters.
 The control is evident for sizes of ControlNet-XS of 400M, 104M and 48M parameters,
-as shown below for guidance with depth maps (Midas [Ranftl et al., 2020]) and canny edges,
+as shown below for guidance with depth maps (MiDaS [Ranftl et al., 2020]) and Canny edges,
 respectively. A row shows three example results of Model B, each with a different seed. Note, we use the same seed for each column.
 
   </p>
@@ -68,9 +68,9 @@ respectively. A row shows three example results of Model B, each with a differen
   <p>
 
   We show generations of three versions of ControlNet-XS with 491M, 55M and 14M parameters respectively.
-   We control Stable Diffusion with depth maps (Midas) and Canny edges.
+   We control Stable Diffusion with depth maps (MiDaS) and Canny edges.
   Even the smallest model with 1.6% of the base model size, which has 865M parameters, is able to
-   reliably guide the generation process .
+  reliably guide the generation process.
   As above, a row shows three example results of Model B, each with a different seed. Note, we use the same seed for each column.
 
   </p>
@@ -95,18 +95,18 @@ significant reduction in quality of the generated image:
     <ul type="i">
       <li>
         The final output image of stable diffusion, which we call the base model, is generated iteratively in a series of time steps.
-        At each time step a U-Net, with an encoder and decoder, is executed as illustrated below.
+        At each time step, a U-Net with an encoder and decoder is executed as illustrated below.
         At each iteration, the input to the base model and the control model is the generated image
         of the previous time step. The control model additionally receives a control image. The problem is that
         in the encoder phase, both models operate independently, and the feedback from the control model
         enters only in the decode phase of the base model. The result is a delayed correction/controlling mechanism, 
         and it implies that the ControlNet has to do two jobs. Instead of solely focusing all network 
-        capacity on correction/controlling, ControlNet has to additionally anticipate in advance,
-        what “mistakes” the Encoder of the base model is going to make.
+        capacity on correction/controlling, ControlNet has to additionally anticipate in advance
+        what "mistakes" the Encoder of the base model is going to make.
       </li>
       <li>
         By implying that image generation and controlling require similar model capacities, it is natural to initialize
-        the weights of ControlNet with the weights of the base model, and then fine-tuning them. With our ControlNet-XS
+        the weights of ControlNet with the weights of the base model and then fine-tuning them. With our ControlNet-XS
         we diverge in design from the base model, and hence train the weights of ControlNet-XS from scratch.
       </li>
     </ul>
@@ -138,15 +138,21 @@ significant reduction in quality of the generated image:
 
   <p>
     
-    We focus our attention on variant B and train it with three different model sizes for canny and depth map
-    guidance, respectively, and for StableDiffusion 2.1 and the current StableDIffusion-XL version.    
+    We focus our attention on variant B and train it with different model sizes for canny and depth map
+    guidance, respectively, for StableDiffusion 1.5, StableDiffusion 2.1 and the current StableDIffusion-XL version.    
   </p>
   <img class="summary-img" src="./ControlNet-XS_files/fid_comparison.png" style="width:55%;">
 </div>
 
 <div class="content">
   <h2>BibTex</h2>
-  To be announced.
+  <code>
+  @article{zavadski2023controlnetxs,<br>
+    &nbsp;&nbsp;title={ControlNet-XS: Designing an Efficient and Effective Architecture for Controlling Text-to-Image Diffusion Models}, <br>
+    &nbsp;&nbsp;author={Denis Zavadski, Johann-Friedrich Feiden and Carsten Rother},<br>
+    &nbsp;&nbsp;year={2023},<br>
+    &nbsp;&nbsp;booktitle={arXiv preprint arxiv:2312.06573}<br>
+}</code>
 </div>
 
 <div class="content">
@@ -184,6 +190,11 @@ significant reduction in quality of the generated image:
     <dt>[Lin et al., 2014]</dt>
     <dd>
       Tsung-Yi Lin, Michael Maire, Serge Belongie, James Hays, Pietro Perona, Deva Ramanan, Piotr Dollár, and C Lawrence Zitnick. Microsoft coco: Common objects in context. In ECCV 2014.
+    </dd><br>
+
+    <dt>[Zhao et al., 2023]</dt>
+    <dd>
+      Zhao, Shihao and Chen, Dongdong and Chen, Yen-Chun and Bao, Jianmin and Hao, Shaozhe and Yuan, Lu and Wong, Kwan-Yee K. Uni-ControlNet: All-in-One Control to Text-to-Image Diffusion Models. arXiv preprint arXiv:2305.16322
     </dd><br>
   </dl>
 </div>
