@@ -138,6 +138,7 @@ class GeneralConditioner(nn.Module):
                 if hasattr(embedder, "input_key") and (embedder.input_key is not None):
                     if embedder.legacy_ucg_val is not None:
                         batch = self.possibly_get_ucg_val(embedder, batch)
+                    # print(f">> batch contain keys {batch.keys()}")  # -------------mock added some key point------------
                     emb_out = embedder(batch[embedder.input_key])
                 elif hasattr(embedder, "input_keys"):
                     emb_out = embedder(*[batch[k] for k in embedder.input_keys])
@@ -166,7 +167,7 @@ class GeneralConditioner(nn.Module):
                     emb = torch.zeros_like(emb)
                 if out_key in output:
                     output[out_key] = torch.cat(
-                        (output[out_key], emb), self.KEY2CATDIM[out_key]
+                        (output[out_key].to(device=emb.device), emb), self.KEY2CATDIM[out_key]
                     )
                 else:
                     output[out_key] = emb
@@ -425,6 +426,9 @@ class FrozenOpenCLIPEmbedder2(AbstractEmbModel):
     ):
         super().__init__()
         assert layer in self.LAYERS
+        # model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
+        # tokenizer = open_clip.get_tokenizer('ViT-B-32')
+
         model, _, _ = open_clip.create_model_and_transforms(
             arch,
             device=torch.device("cpu"),

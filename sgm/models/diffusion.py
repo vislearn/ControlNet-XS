@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Tuple, Union
 
 import pytorch_lightning as pl
 import torch
+from einops import rearrange, repeat
 from omegaconf import ListConfig, OmegaConf
 from safetensors.torch import load_file as load_safetensors
 from torch.optim.lr_scheduler import LambdaLR
@@ -21,6 +22,33 @@ from ..util import (
 from torchvision import transforms as tt
 import numpy as np
 
+
+def get_batch(batch, device):
+    # Hardcoded demo setups; might undergo some changes in the future
+
+    # batch["hint"] = batch["image"]
+    N = batch["image"].shape[0]
+    batch["crop_coords_top_left"]   = torch.tensor([0, 0])
+    batch["original_size_as_tuple"] = torch.tensor(batch["image"].shape[-2:]).to(device).repeat(N, 1)
+    batch["target_size_as_tuple"]   = torch.tensor(batch["image"].shape[-2:]).to(device).repeat(N, 1)
+    # batch["original_size_as_tuple"] = (
+    #     torch.tensor([value_dict["orig_height"], value_dict["orig_width"]])
+    #     .to(device)
+    #     .repeat(*N, 1)
+    # )
+    # batch["crop_coords_top_left"] = (
+    #     torch.tensor(
+    #         [value_dict["crop_coords_top"], value_dict["crop_coords_left"]]
+    #     )
+    #     .to(device)
+    #     .repeat(*N, 1)
+    # )
+    # batch["target_size_as_tuple"] = (
+    #     torch.tensor([value_dict["target_height"], value_dict["target_width"]])
+    #     .to(device)
+    #     .repeat(*N, 1)
+    # )
+    return batch
 
 class DiffusionEngine(pl.LightningModule):
     def __init__(
@@ -53,7 +81,7 @@ class DiffusionEngine(pl.LightningModule):
             optimizer_config, {"target": "torch.optim.AdamW"}
         )
 
-        if skip_wrapper:
+        if skip_wrapper:  # 初始化 COntrolnetXS 模TwoStreamControlNet
             self.model = instantiate_from_config(network_config)
         else:
             model = instantiate_from_config(network_config)
@@ -62,6 +90,7 @@ class DiffusionEngine(pl.LightningModule):
             )
 
         self.denoiser = instantiate_from_config(denoiser_config)
+        print(f">> denoiser config {denoiser_config}")
         self.sampler = (
             instantiate_from_config(sampler_config)
             if sampler_config is not None
@@ -131,7 +160,17 @@ class DiffusionEngine(pl.LightningModule):
         # assuming unified data format, dataloader returns a dict.
         # image tensors should be scaled to -1 ... 1 and in bchw format
         return batch[self.input_key]
-
+    
+    def get_input(self, batch, k):
+        
+        x = batch[k]
+        if len(x.shape) == 3:
+            x = x[..., None]
+        x = rearrange(x, 'b h w c -> b c h w')
+        x = x.to(memory_format=torch.contiguous_format).float()
+        # print(">> bath",batch.keys(), x.shape)
+        return x
+    
     @torch.no_grad()
     def decode_first_stage(self, z):
         z = 1.0 / self.scale_factor * z
@@ -153,10 +192,18 @@ class DiffusionEngine(pl.LightningModule):
         return loss_mean, loss_dict
 
     def shared_step(self, batch: Dict) -> Any:
-        x = self.get_input(batch)
+        x = self.get_input(batch, self.input_key)
+        batch[self.input_key] = x
+        batch = get_batch(batch, "cuda")
+
+        # print(f">> xxxx.shape{x.shape}, xdtype {x.dtype}, crop_coords_top_left {batch['crop_coords_top_left']}, {batch['original_size_as_tuple']}, {batch['target_size_as_tuple']}")
+        # >> xxxx.shapetorch.Size([2, 3, 512, 512]), xdtype torch.float32, crop_coords_top_left tensor([0, 0]), tensor([[512, 512],
+        # [512, 512]], device='cuda:0'), tensor([[512, 512],
+        # [512, 512]], device='cuda:0')
         x = self.encode_first_stage(x)
         batch["global_step"] = self.global_step
-        loss, loss_dict = self(x, batch)
+        loss, loss_dict = self(x, batch)      #  loss = self.loss_fn(self.model, self.denoiser, self.conditioner, x, batch)  
+        # cond = conditioner(batch)emb_out = embedder(batch[embedder.input_key])
         return loss, loss_dict
 
     def training_step(self, batch, batch_idx):
@@ -245,6 +292,7 @@ class DiffusionEngine(pl.LightningModule):
         denoiser = lambda input, sigma, c: self.denoiser(
             self.model, input, sigma, c, **kwargs
         )
+        print(f">> denoiser type {type(denoiser)}")
         samples = self.sampler(denoiser, randn, cond, uc=uc)
         return samples
 
@@ -307,7 +355,7 @@ class DiffusionEngine(pl.LightningModule):
             ucg_keys = conditioner_input_keys
         log = dict()
 
-        x = self.get_input(batch)
+        x = self.get_input(batch, self.input_key)
 
         c, uc = self.conditioner.get_unconditional_conditioning(
             batch,

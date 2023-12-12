@@ -4,6 +4,7 @@ model:
   params:
     scale_factor: 0.13025
     disable_first_stage_autocast: true
+    input_key : "image"
     denoiser_config:
       target: sgm.modules.diffusionmodules.denoiser.ControlledDiscreteDenoiser
       params:
@@ -58,13 +59,15 @@ model:
       params:
         emb_models:
         - is_trainable: false
-          input_key: caption
+          # input_key: caption
+          input_key:  txt
           target: sgm.modules.encoders.modules.FrozenCLIPEmbedder
           params:
             layer: hidden
             layer_idx: 11
         - is_trainable: false
-          input_key: caption
+          # input_key: caption
+          input_key:  txt
           target: sgm.modules.encoders.modules.FrozenOpenCLIPEmbedder2
           params:
             arch: ViT-bigG-14
@@ -74,7 +77,7 @@ model:
             always_return_pooled: true
             legacy: false
         - is_trainable: false
-          input_key: original_size_as_tuple
+          input_key: original_size_as_tuple # bad ---------TODO
           target: sgm.modules.encoders.modules.ConcatTimestepEmbedderND
           params:
             outdim: 256
@@ -132,4 +135,112 @@ model:
           target: sgm.modules.diffusionmodules.guiders.VanillaCFG
           params:
             scale: 7.5
-    input_key: image
+
+# data:
+#   target: sgm.data.dataset.StableDataModuleFromConfig
+#   params:
+#     train:
+#       datapipeline:
+#         urls:
+#           # USER: adapt this path the root of your custom dataset
+#           # - "DATA_PATH"
+#           # dataset_name='/home/dell/workspace/dataset/laion_data/',
+#           # dataset_name='/home/dell/workspace/controlnet/sampleset/',
+#           # dataset_name='/home/dell/workspace/T2IAdapter-SDXL/face3w/face3w.py',
+#           /home/dell/workspace/T2IAdapter-SDXL/face3w/face1set.py
+#         pipeline_config:
+#           shardshuffle: 10000
+#           sample_shuffle: 10000
+
+
+#         decoders:
+#           - "pil"
+
+#         postprocessors:
+#           - target: sdata.mappers.TorchVisionImageTransforms
+#             params:
+#               key: 'jpg' # USER: you might wanna adapt this for your custom dataset
+#               transforms:
+#                 - target: torchvision.transforms.Resize
+#                   params:
+#                     size: 256
+#                     interpolation: 3
+#                 - target: torchvision.transforms.ToTensor
+#           - target: sdata.mappers.Rescaler
+#             # USER: you might wanna use non-default parameters due to your custom dataset
+#           - target: sdata.mappers.AddOriginalImageSizeAsTupleAndCropToSquare
+#             # USER: you might wanna use non-default parameters due to your custom dataset
+
+#       loader:
+#         batch_size: 2
+#         num_workers: 1
+
+data:
+  target: data.datam.DataModuleFromConfig
+  params:
+    batch_size: 2
+    num_workers: 1
+    num_val_workers: 0 # Avoid a weird val dataloader issue
+    train:
+      # target: ldm.data.simple.hf_dataset
+      target: data.simple.hf_dataset
+      params:
+        # name: lambdalabs/pokemon-blip-captions
+        name: /home/dell/workspace/dataset/lambdalabs___pokemon-blip-captions/
+        image_transforms:
+        - target: torchvision.transforms.Resize
+          params:
+            size: 512
+            interpolation: 3
+        - target: torchvision.transforms.RandomCrop
+          params:
+            size: 512
+        - target: torchvision.transforms.RandomHorizontalFlip
+    validation:
+      target: data.simple.TextOnly
+      params:
+        captions:
+        - "A pokemon with green eyes, large wings, and a hat"
+        - "A cute bunny rabbit"
+        - "Yoda"
+        - "An epic landscape photo of a mountain"
+        output_size: 512
+        n_gpus: 1 # small hack to make sure we see all our samples
+
+    # loader:
+    #   batch_size: 2
+    #   num_workers: 1
+
+lightning:
+  modelcheckpoint:
+    params:
+      # every_n_train_steps: 30
+      every_n_train_steps: 300
+
+  callbacks:
+    metrics_over_trainsteps_checkpoint:
+      params:
+        # every_n_train_steps: 25
+        every_n_train_steps: 250
+
+    image_logger:
+      target: main.ImageLogger
+      params:
+        disabled: False
+        enable_autocast: False
+        batch_frequency: 200
+        max_images: 2
+        increase_log_steps: True
+        log_first_step: False
+        log_images_kwargs:
+          use_ema_scope: False
+          N: 8
+          n_rows: 2
+
+  trainer:
+    devices: 0,
+    benchmark: True
+    num_sanity_val_steps: 0
+    accumulate_grad_batches: 1
+    max_epochs: 3
+    
