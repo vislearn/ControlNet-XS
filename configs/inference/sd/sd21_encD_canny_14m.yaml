@@ -17,9 +17,9 @@ model:
     monitor: val/loss_simple_ema
     scale_factor: 0.18215
     use_ema: false
-    sync_path: /PATH/TO/STABLEDIFFUSION/v2-1_512-ema-pruned.ckpt  #  path to the StableDiffusion v 2.1 weights
-    ckpt_path_ctr: ./checkpoints/sd21_encD_canny_14m.ckpt         #  path to the ControlNet-XS weights
+    sync_path: /PATH/TO/STABLE_DIFFUSION/v2-1_512-ema-pruned.ckpt                 #  path to the StableDiffusion v 2.1 weights
     synch_control: false
+    ckpt_path_ctr: /PATH/TO/CONTROLNET_XS/CHECKPOINT/sd21_encD_canny_14m.ckpt     #  path to the ControlNet-XS weights
     control_mode: canny
     control_stage_config:
       target: ldm.modules.diffusionmodules.twoStreamControl.TwoStreamControlNet

@@ -17,14 +17,13 @@ model:
     monitor: val/loss_simple_ema
     scale_factor: 0.18215
     use_ema: false
-    sync_path: /PATH/TO/STABLE_DIFFUSION/v2-1_512-ema-pruned.ckpt                 #  path to the StableDiffusion v 2.1 weights
+    sync_path: /PATH/TO/STABLE_DIFFUSION/v1-5-pruned.ckpt                         #  path to the StableDiffusion v 1.5 weights
     synch_control: false
-    ckpt_path_ctr: /PATH/TO/CONTROLNET_XS/CHECKPOINT/sd21_encD_depth_14m.yaml     #  path to the ControlNet-XS weights
+    ckpt_path_ctr: /PATH/TO/CONTROLNET_XS/CHECKPOINT/sd15_encD_depth_53m.ckpt     #  path to the ControlNet-XS weights
     control_mode: midas
     control_stage_config:
       target: ldm.modules.diffusionmodules.twoStreamControl.TwoStreamControlNet
       params:
-        use_checkpoint: true
         image_size: 32
         in_channels: 4
         out_channels: 4
@@ -40,23 +39,22 @@ model:
         - 2
         - 4
         - 4
-        num_head_channels: 8
+        num_heads: 8
         use_spatial_transformer: true
-        use_linear_in_transformer: true
         transformer_depth: 1
-        context_dim: 1024
+        context_dim: 768
+        use_checkpoint: true
         legacy: false
         infusion2control: cat
         infusion2base: add
         guiding: encoder_double
         two_stream_mode: cross
-        control_model_ratio: 0.0125
+        control_model_ratio: 0.2
+        learn_embedding: false
         fixed: true
-
     unet_config:
       target: ldm.modules.diffusionmodules.openaimodel.UNetModel
       params:
-        use_checkpoint: true
         image_size: 32
         in_channels: 4
         out_channels: 4
@@ -71,11 +69,11 @@ model:
         - 2
         - 4
         - 4
-        num_head_channels: 64
+        num_heads: 8
         use_spatial_transformer: true
-        use_linear_in_transformer: true
         transformer_depth: 1
-        context_dim: 1024
+        context_dim: 768
+        use_checkpoint: true
         legacy: false
     first_stage_config:
       target: ldm.models.autoencoder.AutoencoderKL
@@ -100,7 +98,4 @@ model:
         lossconfig:
           target: torch.nn.Identity
     cond_stage_config:
-      target: ldm.modules.encoders.modules.FrozenOpenCLIPEmbedder
-      params:
-        freeze: true
-        layer: penultimate
+      target: ldm.modules.encoders.modules.FrozenCLIPEmbedder
