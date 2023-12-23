@@ -1,5 +1,5 @@
 model:
-  base_learning_rate: 1.0e-05
+  base_learning_rate: 0.0001
   target: sgm.models.diffusion.ControlledDiffusionEngine
   params:
     scale_factor: 0.13025
@@ -14,10 +14,10 @@ model:
           target: sgm.modules.diffusionmodules.denoiser_scaling.EpsScaling
         discretization_config:
           target: sgm.modules.diffusionmodules.discretizer.LegacyDDPMDiscretization
+    ckpt_path: /PATH/TO/STABLE_DIFFUSION/sd_xl_base_1.0_0.9vae.safetensors                    #  path to the StableDiffusion-XL weights
+    ckpt_path_control: /PATH/TO/CONTROLNET_XS/CHECKPOINT/sdxl_encD_depth_48m.safetensors      #  path to the ControlNet-XS weights
     sd_locked: true
     skip_wrapper: true
-    ckpt_path: /PATH/TO/STABLEDIFFUSION/sd_xl_base_1.0_0.9vae.safetensors   #  path to the StableDiffusion-XL weights
-    ckpt_path_control: ./checkpoints/sdxl_encD_depth_48m.safetensors        #  path to the ControlNet-XS weights
     network_config:
       target: sgm.modules.diffusionmodules.twoStreamControl.TwoStreamControlNet
       params:
@@ -50,8 +50,8 @@ model:
         guiding: encoder_double
         two_stream_mode: cross
         control_model_ratio: 0.1
-        control_mode: midas
         learn_embedding: true
+        fixed: true
     conditioner_config:
       target: sgm.modules.encoders.modules.GeneralConditioner
       params:

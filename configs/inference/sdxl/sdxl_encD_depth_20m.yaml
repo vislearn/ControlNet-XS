@@ -15,7 +15,8 @@ model:
         discretization_config:
           target: sgm.modules.diffusionmodules.discretizer.LegacyDDPMDiscretization
     ckpt_path: /PATH/TO/STABLE_DIFFUSION/sd_xl_base_1.0_0.9vae.safetensors                    #  path to the StableDiffusion-XL weights
-    ckpt_path_control: /PATH/TO/CONTROLNET_XS/CHECKPOINT/sdxl_encD_canny_48m.safetensors      #  path to the ControlNet-XS weights
+    ckpt_path_control: /PATH/TO/CONTROLNET_XS/CHECKPOINT/sdxl_encD_depth_20m.safetensors      #  path to the ControlNet-XS weights
+    sd_locked: true
     sd_locked: true
     skip_wrapper: true
     network_config:
@@ -49,8 +50,10 @@ model:
         infusion2control: cat
         guiding: encoder_double
         two_stream_mode: cross
-        control_model_ratio: 0.1
-        learn_embedding: true
+        control_model_ratio: 0.05
+        control_mode: null
+        learn_embedding: false
+        prune_until: null
         fixed: true
     conditioner_config:
       target: sgm.modules.encoders.modules.GeneralConditioner
