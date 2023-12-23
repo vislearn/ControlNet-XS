@@ -28,8 +28,18 @@ from ...modules.diffusionmodules.openaimodel import (
 )
 
 from ...util import default, exists
+
+from annotator.midas import MidasDetector
 from torchvision import transforms as tt
 import numpy as np
+
+
+class PseudoModule(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, *args, **kwargs):
+        return 0
 
 
 class TwoStreamControlNet(nn.Module):
@@ -70,6 +80,8 @@ class TwoStreamControlNet(nn.Module):
             base_model=None,
             learn_embedding=False,
             control_mode='canny',
+            prune_until=None,
+            fixed=False,
     ):
         assert infusion2control in ('cat', 'add', None), f'infusion2control needs to be cat, add or None, but not {infusion2control}'
         assert infusion2base == 'add', f'infusion2base only defined for add, but not {infusion2base}'
@@ -91,6 +103,8 @@ class TwoStreamControlNet(nn.Module):
         self.model_channels = model_channels
         self.no_control = False
         self.control_scale = 1.0
+        self.prune_until = prune_until
+        self.fixed = fixed
 
         self.hint_model = None
 
@@ -112,8 +126,7 @@ class TwoStreamControlNet(nn.Module):
                 # num_attention_blocks=num_attention_blocks,
                 # disable_middle_self_attn=disable_middle_self_attn,
             )  # initialise control model from base model
-
-        self.control_model = ControlledXLUNetModel(
+        self.control_model = ControlledXLUNetModelFixed(
             adm_in_channels=adm_in_channels, num_classes=num_classes, use_checkpoint=use_checkpoint,
             in_channels=in_channels, out_channels=out_channels, model_channels=model_channels,
             attention_resolutions=attention_resolutions, num_res_blocks=num_res_blocks,
@@ -124,7 +137,7 @@ class TwoStreamControlNet(nn.Module):
             conv_resample=conv_resample, dims=dims, use_fp16=use_fp16, num_heads=num_heads,
             num_heads_upsample=num_heads_upsample, use_scale_shift_norm=use_scale_shift_norm,
             resblock_updown=resblock_updown, use_new_attention_order=use_new_attention_order,
-            n_embed=n_embed,
+            n_embed=n_embed, fixed=fixed,
             # disable_self_attentions=disable_self_attentions,
             # num_attention_blocks=num_attention_blocks,
             # disable_middle_self_attn=disable_middle_self_attn,
@@ -134,8 +147,6 @@ class TwoStreamControlNet(nn.Module):
 
         self.diffusion_model = base_model
 
-        # if guiding in ('encoder', 'encoder_double'):
-        #     self.control_model.output_blocks = None
         ################# end control model variations #################
 
         self.enc_zero_convs_out = nn.ModuleList([])
@@ -267,8 +278,31 @@ class TwoStreamControlNet(nn.Module):
             zero_module(conv_nd(dims, 256, int(model_channels * control_model_ratio), 3, padding=1))
         )
 
+        if self.prune_until is not None:
+            self.prune_last(prune_until)
+        elif not self.learn_embedding:
+            if not self.learn_embedding:
+                self.control_model.time_embed = PseudoModule()
+        self.control_model.label_emb = PseudoModule()
+
         scale_list = [1.] * len(self.enc_zero_convs_out) + [1.] + [1.] * len(self.dec_zero_convs_out)
         self.register_buffer('scale_list', torch.tensor(scale_list))
+
+    def prune_last(self, end_layer):
+        for n in range(len(self.control_model.input_blocks)):
+            if n >= end_layer:
+                self.control_model.input_blocks[n] = PseudoModule()
+
+        self.control_model.middle_block = PseudoModule()
+        if not self.learn_embedding:
+            self.control_model.time_embed = PseudoModule()
+        self.control_model.label_emb = PseudoModule()
+
+        self.enc_zero_convs_in = nn.ModuleList(self.enc_zero_convs_in[:end_layer] + [PseudoModule()] * len(self.enc_zero_convs_in[end_layer:]))
+        self.enc_zero_convs_out = nn.ModuleList(self.enc_zero_convs_out[:end_layer] + [PseudoModule()] * len(self.enc_zero_convs_out[end_layer:]))
+        self.middle_block_in = self.middle_block_out = PseudoModule()
+        self.dec_zero_convs_in = nn.ModuleList([PseudoModule()] * len(self.dec_zero_convs_in))
+        self.dec_zero_convs_out = nn.ModuleList([PseudoModule()] * len(self.dec_zero_convs_out))
 
     def make_zero_conv(self, in_channels, out_channels=None):
         self.in_channels = in_channels
@@ -276,6 +310,14 @@ class TwoStreamControlNet(nn.Module):
         return TimestepEmbedSequential(
             zero_module(conv_nd(self.dims, in_channels, out_channels, 1, padding=0))
         )
+
+    def infuse(self, stream, infusion, mlp, variant, emb, scale=1.0):
+        if variant == 'add':
+            stream = stream + mlp(infusion, emb) * scale
+        elif variant == 'cat':
+            stream = torch.cat([stream, mlp(infusion, emb) * scale], dim=1)
+
+        return stream
 
     def forward(
         self, x: torch.Tensor, t: torch.Tensor, c: dict, hint: torch.Tensor, **kwargs
@@ -340,78 +382,539 @@ class TwoStreamControlNet(nn.Module):
         scales = iter(self.scale_list)
 
         ###################### Cross Control        ######################
-
         if self.two_stream_mode == 'cross':
-            # input blocks (encoder)
+            #  input blocks (encoder)
             for module_base, module_ctr in zip(base_model.input_blocks, self.control_model.input_blocks):
                 h_base = module_base(h_base, emb, context)
-                h_ctr = module_ctr(h_ctr, emb, context)
+                if "PseudoModule" not in str(type(module_ctr)):
+                    h_ctr = module_ctr(h_ctr, emb, context)
                 if guided_hint is not None:
                     h_ctr = h_ctr + guided_hint
-                    # h_ctr = torch.cat([h_ctr, guided_hint], dim=1)
                     guided_hint = None
 
                 if self.guiding in ('encoder_double', 'full'):
-                    if self.infusion2base == 'add':
-                        h_base = h_base + next(it_enc_convs_out)(h_ctr, emb) * next(scales)
-                    elif self.infusion2base == 'cat':
-                        raise NotImplementedError()
+                    h_base = self.infuse(h_base, h_ctr, next(it_enc_convs_out), self.infusion2base, emb, scale=next(scales))
 
                 hs_base.append(h_base)
                 hs_ctr.append(h_ctr)
 
-                if self.infusion2control == 'add':
-                    h_ctr = h_ctr + next(it_enc_convs_in)(h_base, emb)
-                elif self.infusion2control == 'cat':
-                    h_ctr = th.cat([h_ctr, next(it_enc_convs_in)(h_base, emb)], dim=1)
+                if "PseudoModule" not in str(type(module_ctr)):
+                    h_ctr = self.infuse(h_ctr, h_base, next(it_enc_convs_in), self.infusion2control, emb)
 
             # mid blocks (bottleneck)
             h_base = base_model.middle_block(h_base, emb, context)
             h_ctr = self.control_model.middle_block(h_ctr, emb, context)
 
-            if self.infusion2base == 'add':
-                h_base = h_base + self.middle_block_out(h_ctr, emb) * next(scales)
-            elif self.infusion2base == 'cat':
-                raise NotImplementedError()
+            h_base = self.infuse(h_base, h_ctr, self.middle_block_out, self.infusion2base, emb, scale=next(scales))
 
             if self.guiding == 'full':
-                if self.infusion2control == 'add':
-                    h_ctr = h_ctr + self.middle_block_in(h_base, emb)
-                elif self.infusion2control == 'cat':
-                    h_ctr = th.cat([h_ctr, self.middle_block_in(h_base, emb)], dim=1)
+                h_ctr = self.infuse(h_ctr, h_base, self.middle_block_in, self.infusion2control, emb)
 
             # output blocks (decoder)
             for module_base, module_ctr in zip(
                     base_model.output_blocks,
                     self.control_model.output_blocks if hasattr(
-                    self.control_model, 'output_blocks') else [None] * len(base_model.output_blocks)
+                        self.control_model, 'output_blocks') else [None] * len(base_model.output_blocks)
             ):
 
                 if self.guiding != 'full':
-                    if self.infusion2base == 'add':
-                        h_base = h_base + next(it_dec_convs_out)(hs_ctr.pop(), emb) * next(scales)
-                    elif self.infusion2base == 'cat':
-                        raise NotImplementedError()
+                    h_base = self.infuse(h_base, hs_ctr.pop(), next(it_dec_convs_out), self.infusion2base, emb, scale=next(scales))
 
                 h_base = th.cat([h_base, hs_base.pop()], dim=1)
                 h_base = module_base(h_base, emb, context)
+
+                ##### Quick and dirty way of fixing "full" with not applying corrections to the last layer #####
                 if self.guiding == 'full':
                     h_ctr = th.cat([h_ctr, hs_ctr.pop()], dim=1)
                     h_ctr = module_ctr(h_ctr, emb, context)
                     if module_base != base_model.output_blocks[-1]:
-                        if self.infusion2base == 'add':
-                            h_base = h_base + next(it_dec_convs_out)(h_ctr, emb) * next(scales)
-                        elif self.infusion2base == 'cat':
-                            raise NotImplementedError()
+                        h_base = self.infuse(h_base, h_ctr, next(it_dec_convs_out), self.infusion2base, emb, scale=next(scales))
+                        h_ctr = self.infuse(h_ctr, h_base, next(it_dec_convs_in), self.infusion2control, emb)
 
-                        if self.infusion2control == 'add':
-                            h_ctr = h_ctr + next(it_dec_convs_in)(h_base, emb)
-                        elif self.infusion2control == 'cat':
-                            h_ctr = th.cat([h_ctr, next(it_dec_convs_in)(h_base, emb)], dim=1)
-        else:
-            raise NotImplementedError()
         h_base = h_base.type(x.dtype)
         return base_model.out(h_base)
+
+
+class ControlledXLUNetModelFixed(nn.Module):
+    """
+    The full UNet model with attention and timestep embedding.
+    :param in_channels: channels in the input Tensor.
+    :param model_channels: base channel count for the model.
+    :param out_channels: channels in the output Tensor.
+    :param num_res_blocks: number of residual blocks per downsample.
+    :param attention_resolutions: a collection of downsample rates at which
+        attention will take place. May be a set, list, or tuple.
+        For example, if this contains 4, then at 4x downsampling, attention
+        will be used.
+    :param dropout: the dropout probability.
+    :param channel_mult: channel multiplier for each level of the UNet.
+    :param conv_resample: if True, use learned convolutions for upsampling and
+        downsampling.
+    :param dims: determines if the signal is 1D, 2D, or 3D.
+    :param num_classes: if specified (as an int), then this model will be
+        class-conditional with `num_classes` classes.
+    :param use_checkpoint: use gradient checkpointing to reduce memory usage.
+    :param num_heads: the number of attention heads in each attention layer.
+    :param num_heads_channels: if specified, ignore num_heads and instead use
+                               a fixed channel width per attention head.
+    :param num_heads_upsample: works with num_heads to set a different number
+                               of heads for upsampling. Deprecated.
+    :param use_scale_shift_norm: use a FiLM-like conditioning mechanism.
+    :param resblock_updown: use residual blocks for up/downsampling.
+    :param use_new_attention_order: use a different attention pattern for potentially
+                                    increased efficiency.
+    """
+
+    def __init__(
+        self,
+        in_channels,
+        model_channels,
+        out_channels,
+        num_res_blocks,
+        attention_resolutions,
+        dropout=0,
+        channel_mult=(1, 2, 4, 8),
+        conv_resample=True,
+        dims=2,
+        num_classes=None,
+        use_checkpoint=False,
+        use_fp16=False,
+        num_heads=-1,
+        num_head_channels=-1,
+        num_heads_upsample=-1,
+        use_scale_shift_norm=False,
+        resblock_updown=False,
+        use_new_attention_order=False,
+        use_spatial_transformer=False,  # custom transformer support
+        transformer_depth=1,  # custom transformer support
+        context_dim=None,  # custom transformer support
+        n_embed=None,  # custom support for prediction of discrete ids into codebook of first stage vq model
+        legacy=True,
+        disable_self_attentions=None,
+        num_attention_blocks=None,
+        disable_middle_self_attn=False,
+        use_linear_in_transformer=False,
+        spatial_transformer_attn_type="softmax",
+        adm_in_channels=None,
+        use_fairscale_checkpoint=False,
+        offload_to_cpu=False,
+        transformer_depth_middle=None,
+        infusion2control='cat',         # how to infuse intermediate information into the control net? {'add', 'cat', None}
+        guiding='encoder',              # use just encoder for control or the whole encoder + decoder net? {'encoder', 'encoder_double', 'full'}
+        two_stream_mode='cross',        # mode for the two stream infusion. {'cross', 'sequential'}
+        control_model_ratio=1.0,
+        fixed=False,
+    ):
+        super().__init__()
+        from omegaconf.listconfig import ListConfig
+
+        if use_spatial_transformer:
+            assert (
+                context_dim is not None
+            ), "Fool!! You forgot to include the dimension of your cross-attention conditioning..."
+
+        if context_dim is not None:
+            assert (
+                use_spatial_transformer
+            ), "Fool!! You forgot to use the spatial transformer for your cross-attention conditioning..."
+            if type(context_dim) == ListConfig:
+                context_dim = list(context_dim)
+
+        if num_heads_upsample == -1:
+            num_heads_upsample = num_heads
+
+        if num_heads == -1:
+            assert (
+                num_head_channels != -1
+            ), "Either num_heads or num_head_channels has to be set"
+
+        if num_head_channels == -1:
+            assert (
+                num_heads != -1
+            ), "Either num_heads or num_head_channels has to be set"
+
+        self.infusion2control = infusion2control
+        infusion_factor = 1 / control_model_ratio
+        if not fixed:
+            infusion_factor = int(infusion_factor)
+        cat_infusion = 1 if infusion2control == 'cat' else 0
+
+        self.guiding = guiding
+        self.two_stage_mode = two_stream_mode
+        seq_factor = 1 if two_stream_mode == 'sequential' and infusion2control == 'cat' else 0
+
+        self.in_channels = in_channels
+        self.model_channels = model_channels
+        self.out_channels = out_channels
+        if isinstance(transformer_depth, int):
+            transformer_depth = len(channel_mult) * [transformer_depth]
+        elif isinstance(transformer_depth, ListConfig):
+            transformer_depth = list(transformer_depth)
+        transformer_depth_middle = default(
+            transformer_depth_middle, transformer_depth[-1]
+        )
+
+        if isinstance(num_res_blocks, int):
+            self.num_res_blocks = len(channel_mult) * [num_res_blocks]
+        else:
+            if len(num_res_blocks) != len(channel_mult):
+                raise ValueError(
+                    "provide num_res_blocks either as an int (globally constant) or "
+                    "as a list/tuple (per-level) with the same length as channel_mult"
+                )
+            self.num_res_blocks = num_res_blocks
+        # self.num_res_blocks = num_res_blocks
+        if disable_self_attentions is not None:
+            # should be a list of booleans, indicating whether to disable self-attention in TransformerBlocks or not
+            assert len(disable_self_attentions) == len(channel_mult)
+        if num_attention_blocks is not None:
+            assert len(num_attention_blocks) == len(self.num_res_blocks)
+            assert all(
+                map(
+                    lambda i: self.num_res_blocks[i] >= num_attention_blocks[i],
+                    range(len(num_attention_blocks)),
+                )
+            )
+            print(
+                f"Constructor of UNetModel received num_attention_blocks={num_attention_blocks}. "
+                f"This option has LESS priority than attention_resolutions {attention_resolutions}, "
+                f"i.e., in cases where num_attention_blocks[i] > 0 but 2**i not in attention_resolutions, "
+                f"attention will still not be set."
+            )  # todo: convert to warning
+
+        self.attention_resolutions = attention_resolutions
+        self.dropout = dropout
+        self.channel_mult = channel_mult
+        self.conv_resample = conv_resample
+        self.num_classes = num_classes
+        self.use_checkpoint = use_checkpoint
+        if use_fp16:
+            print("WARNING: use_fp16 was dropped and has no effect anymore.")
+        # self.dtype = th.float16 if use_fp16 else th.float32
+        self.num_heads = num_heads
+        self.num_head_channels = num_head_channels
+        self.num_heads_upsample = num_heads_upsample
+        self.predict_codebook_ids = n_embed is not None
+
+        assert use_fairscale_checkpoint != use_checkpoint or not (
+            use_checkpoint or use_fairscale_checkpoint
+        )
+
+        self.use_fairscale_checkpoint = False
+        checkpoint_wrapper_fn = (
+            partial(checkpoint_wrapper, offload_to_cpu=offload_to_cpu)
+            if self.use_fairscale_checkpoint
+            else lambda x: x
+        )
+
+        time_embed_dim = model_channels * 4
+        self.time_embed = checkpoint_wrapper_fn(
+            nn.Sequential(
+                linear(model_channels, time_embed_dim),
+                nn.SiLU(),
+                linear(time_embed_dim, time_embed_dim),
+            )
+        )
+
+        ch_orig = model_channels
+        model_channels_orig = model_channels
+        model_channels = max(1, int(model_channels * control_model_ratio))
+        self.model_channels = model_channels
+        self.control_model_ratio = control_model_ratio
+
+        if self.num_classes is not None:
+            if isinstance(self.num_classes, int):
+                self.label_emb = nn.Embedding(num_classes, time_embed_dim)
+            elif self.num_classes == "continuous":
+                print("setting up linear c_adm embedding layer")
+                self.label_emb = nn.Linear(1, time_embed_dim)
+            elif self.num_classes == "timestep":
+                self.label_emb = checkpoint_wrapper_fn(
+                    nn.Sequential(
+                        Timestep(model_channels),
+                        nn.Sequential(
+                            linear(model_channels, time_embed_dim),
+                            nn.SiLU(),
+                            linear(time_embed_dim, time_embed_dim),
+                        ),
+                    )
+                )
+            elif self.num_classes == "sequential":
+                assert adm_in_channels is not None
+                self.label_emb = nn.Sequential(
+                    nn.Sequential(
+                        linear(adm_in_channels, time_embed_dim),
+                        nn.SiLU(),
+                        linear(time_embed_dim, time_embed_dim),
+                    )
+                )
+            elif self.num_classes == "sequential":
+                assert adm_in_channels is not None
+                self.label_emb = nn.Sequential(
+                    nn.Sequential(
+                        linear(adm_in_channels, time_embed_dim),
+                        nn.SiLU(),
+                        linear(time_embed_dim, time_embed_dim),
+                    )
+                )
+            else:
+                raise ValueError()
+
+        self.input_blocks = nn.ModuleList(
+            [
+                TimestepEmbedSequential(
+                    conv_nd(dims, in_channels, model_channels, 3, padding=1)
+                )
+            ]
+        )
+        self._feature_size = model_channels
+        input_block_chans = [model_channels]
+        ch = model_channels
+        ds = 1
+        for level, mult in enumerate(channel_mult):
+            for nr in range(self.num_res_blocks[level]):
+                layers = [
+                    checkpoint_wrapper_fn(
+                        ResBlock(
+                            # int(ch * (1 + cat_infusion * infusion_factor)),
+                            int(ch) + cat_infusion * ch_orig,
+                            time_embed_dim,
+                            dropout,
+                            out_channels=mult * model_channels,
+                            dims=dims,
+                            use_checkpoint=use_checkpoint,
+                            use_scale_shift_norm=use_scale_shift_norm,
+                        )
+                    )
+                ]
+                ch = mult * model_channels
+                ch_orig = mult * model_channels_orig
+                if ds in attention_resolutions:
+                    if num_head_channels == -1:
+                        dim_head = ch // num_heads
+                    else:
+                        # custom code for smaller models - start
+                        num_head_channels = find_denominator(ch, self.num_head_channels)
+                        # custom code for smaller models - end
+                        num_heads = ch // num_head_channels
+                        dim_head = num_head_channels
+                    if legacy:
+                        # num_heads = 1
+                        dim_head = (
+                            ch // num_heads
+                            if use_spatial_transformer
+                            else num_head_channels
+                        )
+                    if exists(disable_self_attentions):
+                        disabled_sa = disable_self_attentions[level]
+                    else:
+                        disabled_sa = False
+
+                    if (
+                        not exists(num_attention_blocks)
+                        or nr < num_attention_blocks[level]
+                    ):
+                        layers.append(
+                            checkpoint_wrapper_fn(
+                                AttentionBlock(
+                                    ch,
+                                    use_checkpoint=use_checkpoint,
+                                    num_heads=num_heads,
+                                    num_head_channels=dim_head,
+                                    use_new_attention_order=use_new_attention_order,
+                                )
+                            )
+                            if not use_spatial_transformer
+                            else checkpoint_wrapper_fn(
+                                SpatialTransformer(
+                                    ch,
+                                    num_heads,
+                                    dim_head,
+                                    depth=transformer_depth[level],
+                                    context_dim=context_dim,
+                                    disable_self_attn=disabled_sa,
+                                    use_linear=use_linear_in_transformer,
+                                    attn_type=spatial_transformer_attn_type,
+                                    use_checkpoint=use_checkpoint,
+                                )
+                            )
+                        )
+                self.input_blocks.append(TimestepEmbedSequential(*layers))
+                self._feature_size += ch
+                input_block_chans.append(ch)
+            if level != len(channel_mult) - 1:
+                out_ch = ch
+                out_ch_orig = ch_orig
+                self.input_blocks.append(
+                    TimestepEmbedSequential(
+                        checkpoint_wrapper_fn(
+                            ResBlock(
+                                int(ch) + (cat_infusion - seq_factor) * ch_orig,
+                                time_embed_dim,
+                                dropout,
+                                out_channels=out_ch,
+                                dims=dims,
+                                use_checkpoint=use_checkpoint,
+                                use_scale_shift_norm=use_scale_shift_norm,
+                                down=True,
+                            )
+                        )
+                        if resblock_updown
+                        else Downsample(
+                            int(ch) + (cat_infusion - seq_factor) * ch_orig,
+                            conv_resample, dims=dims, out_channels=out_ch
+                        )
+                    )
+                )
+                ch = out_ch
+                ch_orig = out_ch_orig
+                input_block_chans.append(ch)
+                ds *= 2
+                self._feature_size += ch
+
+        if num_head_channels == -1:
+            dim_head = ch // num_heads
+        else:
+            num_heads = ch // num_head_channels
+            dim_head = num_head_channels
+        if legacy:
+            # num_heads = 1
+            dim_head = ch // num_heads if use_spatial_transformer else num_head_channels
+        self.middle_block = TimestepEmbedSequential(
+            checkpoint_wrapper_fn(
+                ResBlock(
+                    int(ch) + cat_infusion * ch_orig,
+                    time_embed_dim,
+                    dropout,
+                    out_channels=ch,
+                    dims=dims,
+                    use_checkpoint=use_checkpoint,
+                    use_scale_shift_norm=use_scale_shift_norm,
+                )
+            ),
+            checkpoint_wrapper_fn(
+                AttentionBlock(
+                    ch,
+                    use_checkpoint=use_checkpoint,
+                    num_heads=num_heads,
+                    num_head_channels=dim_head,
+                    use_new_attention_order=use_new_attention_order,
+                )
+            )
+            if not use_spatial_transformer
+            else checkpoint_wrapper_fn(
+                SpatialTransformer(  # always uses a self-attn
+                    ch,
+                    num_heads,
+                    dim_head,
+                    depth=transformer_depth_middle,
+                    context_dim=context_dim,
+                    disable_self_attn=disable_middle_self_attn,
+                    use_linear=use_linear_in_transformer,
+                    attn_type=spatial_transformer_attn_type,
+                    use_checkpoint=use_checkpoint,
+                )
+            ),
+            checkpoint_wrapper_fn(
+                ResBlock(
+                    ch,
+                    time_embed_dim,
+                    dropout,
+                    dims=dims,
+                    use_checkpoint=use_checkpoint,
+                    use_scale_shift_norm=use_scale_shift_norm,
+                )
+            ),
+        )
+        self._feature_size += ch
+
+        if guiding == 'full':
+            self.output_blocks = nn.ModuleList([])
+            for level, mult in list(enumerate(channel_mult))[::-1]:
+                for i in range(self.num_res_blocks[level] + 1):
+                    ich = input_block_chans.pop()
+                    layers = [
+                        checkpoint_wrapper_fn(
+                            ResBlock(
+                                ich + ch if level and i == num_res_blocks and two_stream_mode == 'sequential' else int(ich + ch * (1 + cat_infusion * infusion_factor)),
+                                time_embed_dim,
+                                dropout,
+                                out_channels=model_channels * mult,
+                                dims=dims,
+                                use_checkpoint=use_checkpoint,
+                                use_scale_shift_norm=use_scale_shift_norm,
+                            )
+                        )
+                    ]
+                    ch = model_channels * mult
+                    if ds in attention_resolutions:
+                        if num_head_channels == -1:
+                            dim_head = ch // num_heads
+                        else:
+                            num_heads = ch // num_head_channels
+                            dim_head = num_head_channels
+                        if legacy:
+                            # num_heads = 1
+                            dim_head = (
+                                ch // num_heads
+                                if use_spatial_transformer
+                                else num_head_channels
+                            )
+                        if exists(disable_self_attentions):
+                            disabled_sa = disable_self_attentions[level]
+                        else:
+                            disabled_sa = False
+
+                        if (
+                            not exists(num_attention_blocks)
+                            or i < num_attention_blocks[level]
+                        ):
+                            layers.append(
+                                checkpoint_wrapper_fn(
+                                    AttentionBlock(
+                                        ch,
+                                        use_checkpoint=use_checkpoint,
+                                        num_heads=num_heads_upsample,
+                                        num_head_channels=dim_head,
+                                        use_new_attention_order=use_new_attention_order,
+                                    )
+                                )
+                                if not use_spatial_transformer
+                                else checkpoint_wrapper_fn(
+                                    SpatialTransformer(
+                                        ch,
+                                        num_heads,
+                                        dim_head,
+                                        depth=transformer_depth[level],
+                                        context_dim=context_dim,
+                                        disable_self_attn=disabled_sa,
+                                        use_linear=use_linear_in_transformer,
+                                        attn_type=spatial_transformer_attn_type,
+                                        use_checkpoint=use_checkpoint,
+                                    )
+                                )
+                            )
+                    if level and i == self.num_res_blocks[level]:
+                        out_ch = ch
+                        layers.append(
+                            checkpoint_wrapper_fn(
+                                ResBlock(
+                                    ch,
+                                    time_embed_dim,
+                                    dropout,
+                                    out_channels=out_ch,
+                                    dims=dims,
+                                    use_checkpoint=use_checkpoint,
+                                    use_scale_shift_norm=use_scale_shift_norm,
+                                    up=True,
+                                )
+                            )
+                            if resblock_updown
+                            else Upsample(ch, conv_resample, dims=dims, out_channels=out_ch)
+                        )
+                        ds //= 2
+                    self.output_blocks.append(TimestepEmbedSequential(*layers))
+                    self._feature_size += ch
 
 
 class ControlledXLUNetModel(nn.Module):
@@ -679,7 +1182,8 @@ class ControlledXLUNetModel(nn.Module):
                         disabled_sa = False
 
                     if (
-                        not exists(num_attention_blocks) or nr < num_attention_blocks[level]
+                        not exists(num_attention_blocks)
+                        or nr < num_attention_blocks[level]
                     ):
                         layers.append(
                             checkpoint_wrapper_fn(
@@ -830,7 +1334,8 @@ class ControlledXLUNetModel(nn.Module):
                             disabled_sa = False
 
                         if (
-                            not exists(num_attention_blocks) or i < num_attention_blocks[level]
+                            not exists(num_attention_blocks)
+                            or i < num_attention_blocks[level]
                         ):
                             layers.append(
                                 checkpoint_wrapper_fn(
@@ -898,7 +1403,6 @@ def normalization(channels):
     """
     if find_denominator(channels, 32) < 32:
         print(f'[USING GROUPNORM OVER LESS CHANNELS ({find_denominator(channels, 32)}) FOR {channels} CHANNELS]')
-    # print(f'channels {channels} \tgroups{min(channels, 32)}')
     return GroupNorm_leq32(find_denominator(channels, 32), channels)
 
 
