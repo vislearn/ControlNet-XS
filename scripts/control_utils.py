@@ -196,7 +196,7 @@ def get_sdxl_sample(
     seed_everything(seed)
 
     batch = get_batch(ds_instance=ds, num_samples=num_samples)
-    batch['caption'] = [prompt or ds['caption']] * num_samples
+    batch['caption'] = [prompt if prompt is not None else ds['caption']] * num_samples
 
     for k in batch:
         if isinstance(batch[k], torch.Tensor):
