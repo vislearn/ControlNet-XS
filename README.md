@@ -116,3 +116,20 @@ samples, controls = cu.get_sd_sample(
 Image.fromarray(cu.create_image_grid(samples)).save('SD_MyShoe.png')
 ```
 ![images_2)](./ControlNet-XS_files/SD_MyShoe.png)
+
+
+## Training on Custom Data
+
+To train your own models on custom data, please orient yourself on the `ldm.data.dummy_set.DummyBase` example for the required output. It is an example dataset working with a directory of images.
+For neural network based control hints, like MiDaS depths, it is adviced to pre-compute the hints and load them as images instead of computing them during training.
+
+To train, run in bash
+```
+python main.py -t --base /PATH/TO/CONFIG --logdir /PATH/TO/LOGS --name NAME_YOUR_RUN
+```
+
+### SD 1.5 / 2.1
+Example configs for training Stable Diffusion 1.5 with Canny Edges and Stable Diffusion 2.1 with MiDaS depths (computed on the fly) are in in `configs/training/sd`. You just need to fill in your paths.
+
+### SD 1.5 / 2.1
+Example configs for training Stable Diffusion XL with Canny Edges and with MiDaS depths (computed on the fly) are in in `configs/training/sdxl`. You just need to fill in your paths.

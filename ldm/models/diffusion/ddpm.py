@@ -17,7 +17,10 @@ from functools import partial
 import itertools
 from tqdm import tqdm
 from torchvision.utils import make_grid
-from pytorch_lightning.utilities.distributed import rank_zero_only
+try:
+    from pytorch_lightning.utilities.distributed import rank_zero_only
+except ImportError:
+    from pytorch_lightning.utilities import rank_zero_only
 from omegaconf import ListConfig
 from torchvision import transforms as tt
 
@@ -593,7 +596,7 @@ class LatentDiffusion(DDPM):
 
     @rank_zero_only
     @torch.no_grad()
-    def on_train_batch_start(self, batch, batch_idx, dataloader_idx):
+    def on_train_batch_start(self, batch, batch_idx, *args):
         # only for very first batch
         if self.scale_by_std and self.current_epoch == 0 and self.global_step == 0 and batch_idx == 0 and not self.restarted_from_ckpt:
             assert self.scale_factor == 1., 'rather not use custom rescaling and std-rescaling simultaneously'
@@ -1894,8 +1897,6 @@ class TwoStreamControlLDM(LatentDiffusion):
             log["control"] = c_cat
         elif self.control_mode == 'image':
             log["control"] = c_cat
-        elif self.control_mode == 'light':
-            log['control'] = rearrange(batch['control_grid'] * 2. - 1., 'b h w c -> b c h w')
         else:
             log["control"] = c_cat * 2.0 - 1.0
         log["conditioning"] = log_txt_as_img((512, 512), batch[self.cond_stage_key], size=16)
@@ -1942,6 +1943,7 @@ class TwoStreamControlLDM(LatentDiffusion):
             x_samples_cfg = self.decode_first_stage(samples_cfg)
             log[f"samples_cfg_scale_{unconditional_guidance_scale:.2f}"] = x_samples_cfg
 
+            log['grid'] = torch.cat([log["control"], log["reconstruction"], x_samples_cfg], dim=-2)
         return log
 
     @torch.no_grad()

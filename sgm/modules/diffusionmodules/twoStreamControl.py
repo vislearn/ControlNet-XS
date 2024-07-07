@@ -106,7 +106,10 @@ class TwoStreamControlNet(nn.Module):
         self.prune_until = prune_until
         self.fixed = fixed
 
-        self.hint_model = None
+        if control_mode == 'midas':
+            self.hint_model = MidasDetector()
+        else:
+            self.hint_model = None
 
         ################# start control model variations #################
         if base_model is None:
@@ -333,7 +336,7 @@ class TwoStreamControlNet(nn.Module):
             y=c.get("vector", None),
             hint=hint,
             base_model=self.diffusion_model,
-            compute_hint=False,  # True if self.control_mode == 'midas' else False,
+            compute_hint=True if self.control_mode == 'midas' else False,
             **kwargs,
         )
 

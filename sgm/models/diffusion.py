@@ -330,10 +330,10 @@ class DiffusionEngine(pl.LightningModule):
                     hints.append(tt.ToTensor()(hint_processed[..., None].repeat(3,2)))
                 hint_processed = torch.stack(hints).to(x.device)
                 control = hint_processed.to(memory_format=torch.contiguous_format).float()
-                log['control'] = control
+                log['control'] = control * 2. - 1.
 
             else:
-                log['control'] = hint * 2. - 1. 
+                log['control'] = hint * 2. - 1.
         
         x = x.to(self.device)[:N]
         log["inputs"] = x
@@ -352,6 +352,9 @@ class DiffusionEngine(pl.LightningModule):
                 )
             samples = self.decode_first_stage(samples)
             log["samples"] = samples
+
+        if control_module:
+            log['grid'] = torch.cat([log["control"][:N], log["reconstructions"][:N], samples[:N]], dim=-2)
         return log
 
 

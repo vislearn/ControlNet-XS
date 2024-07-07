@@ -12,3 +12,6 @@
 /outputs
 /build
 /src
+
+# files
+dev.ipynb
