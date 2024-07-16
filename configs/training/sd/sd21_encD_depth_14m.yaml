@@ -17,7 +17,7 @@ model:
     monitor: val/loss_simple_ema
     scale_factor: 0.18215
     use_ema: false
-    sync_path: /PATH/TO/STABLE_DIFFUSION/v1-5-pruned.ckpt                         #  path to the StableDiffusion v 1.5 weights
+    sync_path: /PATH/TO/STABLE_DIFFUSION/v2.1-pruned.ckpt                         #  path to the StableDiffusion v 2.1 weights
     synch_control: false
     ckpt_path_ctr: null
     control_mode: midas
