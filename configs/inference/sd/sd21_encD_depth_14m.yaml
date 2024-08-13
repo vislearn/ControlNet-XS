@@ -19,7 +19,7 @@ model:
     use_ema: false
     sync_path: /PATH/TO/STABLE_DIFFUSION/v2-1_512-ema-pruned.ckpt                 #  path to the StableDiffusion v 2.1 weights
     synch_control: false
-    ckpt_path_ctr: /PATH/TO/CONTROLNET_XS/CHECKPOINT/sd21_encD_depth_14m.yaml     #  path to the ControlNet-XS weights
+    ckpt_path_ctr: /PATH/TO/CONTROLNET_XS/CHECKPOINT/sd21_encD_depth_14m.ckpt     #  path to the ControlNet-XS weights
     control_mode: midas
     control_stage_config:
       target: ldm.modules.diffusionmodules.twoStreamControl.TwoStreamControlNet
