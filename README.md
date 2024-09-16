@@ -1,4 +1,9 @@
-# ControlNet-XS
+# ControlNet-XS: Rethinking the Control of Text-to-Image Diffusion Models as Feedback-Control Systems
+
+**ECCV 2024 (Oral)**
+
+
+Denis Zavadski, Johann-Friedrich Feiden, [Carsten Rother](https://hci.iwr.uni-heidelberg.de/vislearn/people/carsten-rother/)
 
 ![](./ControlNet-XS_files/teaser_small.gif)
 
@@ -133,3 +138,16 @@ Example configs for training Stable Diffusion 1.5 with Canny Edges and Stable Di
 
 ### SD 1.5 / 2.1
 Example configs for training Stable Diffusion XL with Canny Edges and with MiDaS depths (computed on the fly) are in in `configs/training/sdxl`. You just need to fill in your paths.
+
+
+## Citation
+
+```bibtex
+@misc{zavadski2024controlnetxs,
+    title={ControlNet-XS: Rethinking the Control of Text-to-Image Diffusion Models as Feedback-Control Systems}, 
+    author={Denis Zavadski and Johann-Friedrich Feiden and Carsten Rother},
+    year={2024},
+    eprint={2312.06573},
+    archivePrefix={arXiv},
+    primaryClass={cs.CV},
+}
