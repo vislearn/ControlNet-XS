@@ -3,7 +3,7 @@
 **ECCV 2024 (Oral)**
 
 
-Denis Zavadski, Johann-Friedrich Feiden, [Carsten Rother](https://hci.iwr.uni-heidelberg.de/vislearn/people/carsten-rother/)
+[Denis Zavadski](https://sipirius.github.io/), Johann-Friedrich Feiden, [Carsten Rother](https://hci.iwr.uni-heidelberg.de/vislearn/people/carsten-rother/)
 
 ![](./ControlNet-XS_files/teaser_small.gif)
 
